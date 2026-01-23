@@ -1,20 +1,20 @@
 const analyzeBtn = document.getElementById("analyzeBtn");
 const output = document.getElementById("output");
 
-function setLoading() {
-  output.innerHTML = "<p>Loading...</p>";
-}
-
-function setResult(text) {
-  output.innerHTML = `<p>${text}</p>`;
-}
-
 analyzeBtn.addEventListener("click", () => {
-  console.log("Analyze button clicked");
+  output.innerHTML = "<p>Reading page content...</p>";
 
-  setLoading();
-
-  setTimeout(() => {
-    setResult("Popup JavaScript is working correctly ✅");
-  }, 1000);
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    chrome.tabs.sendMessage(
+      tabs[0].id,
+      { type: "GET_PAGE_TEXT" },
+      (response) => {
+        if (response && response.text) {
+          output.innerHTML = `<pre>${response.text}</pre>`;
+        } else {
+          output.innerHTML = "<p>Could not read page content.</p>";
+        }
+      }
+    );
+  });
 });
