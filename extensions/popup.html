@@ -2,21 +2,16 @@
 <html>
   <head>
     <title>InsightX</title>
-    <style>
-      body {
-        font-family: Arial, sans-serif;
-        width: 250px;
-        padding: 10px;
-      }
-      h2 {
-        margin-top: 0;
-      }
-    </style>
+    <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
     <h2>InsightX 🚀</h2>
-    <p>My first Chrome extension</p>
-    <button id="testBtn">Click me</button>
+
+    <button id="analyzeBtn">Analyze Page</button>
+
+    <div id="output">
+      <p class="placeholder">AI insights will appear here.</p>
+    </div>
 
     <script src="popup.js"></script>
   </body>
