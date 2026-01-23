@@ -1,0 +1,9 @@
+{
+  "manifest_version": 3,
+  "name": "InsightX",
+  "description": "AI-powered web insight extension",
+  "version": "1.0",
+  "action": {
+    "default_popup": "popup.html"
+  }
+}
