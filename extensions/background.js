@@ -1,12 +1,23 @@
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  console.log("Background received:", request);
+
   if (request.type === "FETCH_PAGE_TEXT") {
-    chrome.tabs.sendMessage(
-      sender.tab.id,
-      { type: "GET_PAGE_TEXT" },
-      (response) => {
-        sendResponse(response);
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (!tabs || !tabs[0]) {
+        sendResponse({ error: "No active tab" });
+        return;
       }
-    );
-    return true; // keeps message channel open
+
+      chrome.tabs.sendMessage(
+        tabs[0].id,
+        { type: "GET_PAGE_TEXT" },
+        (response) => {
+          console.log("Background got response:", response);
+          sendResponse(response);
+        }
+      );
+    });
+
+    return true; // VERY IMPORTANT
   }
 });
