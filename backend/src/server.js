@@ -12,9 +12,9 @@ app.post("/analyze", (req, res) => {
   console.log("Received text length:", text?.length);
 
   res.json({
-    success: true,
-    message: "Text received successfully",
-    length: text?.length || 0
+  success: true,
+    message: "Backend received page data",
+    preview: text ? text.slice(0, 200) : ""
   });
 });
 

@@ -1,17 +1,28 @@
-const analyzeBtn = document.getElementById("analyzeBtn");
+const btn = document.getElementById("analyzeBtn");
 const output = document.getElementById("output");
 
-analyzeBtn.addEventListener("click", () => {
-  console.log("Popup: Analyze clicked");
-  output.innerHTML = "<p>Fetching page data...</p>";
+btn.addEventListener("click", async () => {
+  output.textContent = "Analyzing...";
 
-  chrome.runtime.sendMessage({ type: "FETCH_PAGE_TEXT" }, (response) => {
-    console.log("Popup received:", response);
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
-    if (response && response.text) {
-      output.innerHTML = `<pre>${response.text}</pre>`;
-    } else {
-      output.innerHTML = "<p>No data received.</p>";
+  chrome.tabs.sendMessage(tab.id, { type: "GET_PAGE_TEXT" }, async (response) => {
+    if (!response || !response.text) {
+      output.textContent = "Failed to read page content";
+      return;
+    }
+
+    try {
+      const res = await fetch("http://localhost:5000/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: response.text })
+      });
+
+      const data = await res.json();
+      output.textContent = data.preview;
+    } catch (err) {
+      output.textContent = "Backend not reachable";
     }
   });
 });
