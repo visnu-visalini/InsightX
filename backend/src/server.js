@@ -1,24 +1,44 @@
+require("dotenv").config();
+
+console.log(
+  "OPENAI KEY LOADED:",
+  process.env.OPENAI_API_KEY ? "YES" : "NO"
+);
+
 const express = require("express");
-const cors = require("cors");
+const analyzeWithAI = require("./utils/ai");
 
-const app = express();
+const app = express(); // ✅ THIS WAS MISSING
 
-app.use(cors());
 app.use(express.json());
 
-app.post("/analyze", (req, res) => {
-  const { text } = req.body;
+app.post("/analyze", async (req, res) => {
+  try {
+    const { text } = req.body;
 
-  console.log("Received text length:", text?.length);
+    if (!text) {
+      return res.status(400).json({
+        success: false,
+        message: "Text is required"
+      });
+    }
 
-  res.json({
-  success: true,
-    message: "Backend received page data",
-    preview: text ? text.slice(0, 200) : ""
-  });
+    const result = await analyzeWithAI(text);
+
+    res.json({
+      success: true,
+      result
+    });
+  } catch (error) {
+    console.error("AI ERROR:", error.message);
+
+    res.status(500).json({
+      success: false,
+      message: "AI processing failed"
+    });
+  }
 });
 
-const PORT = 5000;
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+app.listen(5000, () => {
+  console.log("✅ Server running on http://localhost:5000");
 });
