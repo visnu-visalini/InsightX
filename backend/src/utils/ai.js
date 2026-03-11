@@ -1,25 +1,16 @@
 const OpenAI = require("openai");
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
 async function analyzeWithAI(text) {
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    messages: [
-      {
-        role: "system",
-        content: "You extract keywords and give a short summary."
-      },
-      {
-        role: "user",
-        content: text
-      }
-    ]
+  const response = await openai.responses.create({
+    model: "gpt-5-mini",
+    input: `Analyze this webpage content and give key insights:\n\n${text}`,
   });
 
-  return completion.choices[0].message.content;
+  return response.output[0].content[0].text;
 }
 
 module.exports = analyzeWithAI;
