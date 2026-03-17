@@ -7,3 +7,4 @@ A beginner-friendly Chrome extension to learn:
 
 ## Current Progress
 - Day 1: Extension setup and popup working ✅
+ 

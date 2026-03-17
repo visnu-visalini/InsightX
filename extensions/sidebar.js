@@ -1,4 +1,6 @@
 // DOM Elements
+const tabBtns = document.querySelectorAll('.tab-btn');
+const tabContents = document.querySelectorAll('.tab-content');
 const uploadArea = document.getElementById('uploadArea');
 const resumeFile = document.getElementById('resumeFile');
 const fileInfo = document.getElementById('fileInfo');
@@ -24,18 +26,48 @@ const skillsList = document.getElementById('skillsList');
 const optimizedContent = document.getElementById('optimizedContent');
 const downloadBtn = document.getElementById('downloadBtn');
 
+// History elements
+const historyList = document.getElementById('historyList');
+const refreshHistory = document.getElementById('refreshHistory');
+
 // State
 let uploadedFile = null;
 let jobDescription = null;
+let currentJobTitle = '';
+let currentCompany = '';
+
+const API_URL = 'http://localhost:5000';
+
+// ==================== TAB NAVIGATION ====================
+
+tabBtns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    const targetTab = btn.dataset.tab;
+    
+    // Update active tab button
+    tabBtns.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    
+    // Update active tab content
+    tabContents.forEach(content => {
+      content.classList.remove('active');
+    });
+    
+    if (targetTab === 'optimizer') {
+      document.getElementById('optimizerTab').classList.add('active');
+    } else if (targetTab === 'history') {
+      document.getElementById('historyTab').classList.add('active');
+      loadHistory();
+    }
+  });
+});
 
 // ==================== FILE UPLOAD ====================
 
-// Click to upload
 uploadArea.addEventListener('click', () => {
   resumeFile.click();
 });
 
-// Drag and drop
 uploadArea.addEventListener('dragover', (e) => {
   e.preventDefault();
   uploadArea.style.borderColor = '#667eea';
@@ -58,23 +90,19 @@ uploadArea.addEventListener('drop', (e) => {
   }
 });
 
-// File input change
 resumeFile.addEventListener('change', (e) => {
   if (e.target.files.length > 0) {
     handleFileUpload(e.target.files[0]);
   }
 });
 
-// Handle file upload
 function handleFileUpload(file) {
-  // Validate file type
   const validTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
   if (!validTypes.includes(file.type)) {
     showStatus('Please upload a PDF or DOC file', 'error');
     return;
   }
 
-  // Validate file size (5MB)
   if (file.size > 5 * 1024 * 1024) {
     showStatus('File size must be less than 5MB', 'error');
     return;
@@ -88,7 +116,6 @@ function handleFileUpload(file) {
   showStatus('Resume uploaded successfully', 'success');
 }
 
-// Remove file
 removeFile.addEventListener('click', (e) => {
   e.stopPropagation();
   uploadedFile = null;
@@ -109,26 +136,33 @@ fetchJobBtn.addEventListener('click', async () => {
     showStatus('Fetching job description...', 'info');
     fetchJobBtn.disabled = true;
 
-    // Get current tab content
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     
     const result = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
-      func: () => document.body.innerText
+      func: () => {
+        // Extract job title and company
+        const title = document.querySelector('h1, .job-title, [class*="title"]')?.innerText || 'Job Position';
+        const company = document.querySelector('.company, [class*="company"]')?.innerText || 'Company';
+        const description = document.body.innerText;
+        
+        return { title, company, description };
+      }
     });
 
-    const pageText = result[0].result;
+    const pageData = result[0].result;
 
-    if (!pageText || pageText.length < 50) {
+    if (!pageData.description || pageData.description.length < 50) {
       showStatus('Could not fetch job description', 'error');
       fetchJobBtn.disabled = false;
       return;
     }
 
-    jobDescription = pageText;
+    jobDescription = pageData.description;
+    currentJobTitle = pageData.title.substring(0, 100);
+    currentCompany = pageData.company.substring(0, 100);
     
-    // Show preview
-    const preview = pageText.substring(0, 200) + '...';
+    const preview = pageData.description.substring(0, 200) + '...';
     jobPreviewText.textContent = preview;
     jobPreview.style.display = 'block';
     
@@ -152,18 +186,17 @@ optimizeBtn.addEventListener('click', async () => {
   }
 
   try {
-    // Show loading
     loadingOverlay.style.display = 'flex';
     loadingText.textContent = 'Analyzing your resume...';
     optimizeBtn.disabled = true;
 
-    // Prepare form data
     const formData = new FormData();
     formData.append('resume', uploadedFile);
     formData.append('jobDescription', jobDescription);
+    formData.append('jobTitle', currentJobTitle);
+    formData.append('company', currentCompany);
 
-    // Send to backend
-    const response = await fetch('http://localhost:5000/analyze', {
+    const response = await fetch(`${API_URL}/analyze`, {
       method: 'POST',
       body: formData
     });
@@ -176,11 +209,9 @@ optimizeBtn.addEventListener('click', async () => {
 
     if (data.success) {
       loadingText.textContent = 'Processing results...';
-      
-      // Simulate processing delay for better UX
       await new Promise(resolve => setTimeout(resolve, 800));
       
-      displayResults(data.analysis);
+      displayResults(data.analysis, data.historyId);
       showStatus('Optimization complete', 'success');
     } else {
       throw new Error(data.message || 'Analysis failed');
@@ -197,26 +228,21 @@ optimizeBtn.addEventListener('click', async () => {
 
 // ==================== DISPLAY RESULTS ====================
 
-function displayResults(analysis) {
-  // Hide loading
+function displayResults(analysis, historyId) {
   loadingOverlay.style.display = 'none';
 
-  // Parse AI response and extract scores
   const scores = extractScores(analysis);
   
-  // Display ATS Score
   atsScore.textContent = scores.ats + '%';
   setTimeout(() => {
     atsScoreFill.style.width = scores.ats + '%';
   }, 100);
 
-  // Display Match Score
   matchScore.textContent = scores.match + '%';
   setTimeout(() => {
     matchScoreFill.style.width = scores.match + '%';
   }, 100);
 
-  // Display Skills
   skillsList.innerHTML = '';
   scores.skills.forEach((skill, index) => {
     setTimeout(() => {
@@ -227,41 +253,31 @@ function displayResults(analysis) {
     }, index * 50);
   });
 
-  // Display optimized content
   optimizedContent.textContent = analysis;
-
-  // Show results section
   resultsSection.style.display = 'block';
   resultsSection.scrollIntoView({ behavior: 'smooth' });
 }
 
-// Extract scores from AI response
 function extractScores(text) {
-  // Default values
   let ats = 75;
   let match = 68;
   let skills = ['Communication', 'Leadership', 'Problem Solving', 'Technical Skills', 'Teamwork'];
 
-  // Try to extract ATS score
   const atsMatch = text.match(/ATS[:\s]+(\d+)%?/i);
   if (atsMatch) {
     ats = parseInt(atsMatch[1]);
   } else {
-    // Generate based on content quality
-    ats = Math.floor(Math.random() * 20) + 70; // 70-90
+    ats = Math.floor(Math.random() * 20) + 70;
   }
 
-  // Try to extract match score
   const matchRegex = /match[:\s]+(\d+)%?/i;
   const matchResult = text.match(matchRegex);
   if (matchResult) {
     match = parseInt(matchResult[1]);
   } else {
-    // Generate based on content
-    match = Math.floor(Math.random() * 25) + 65; // 65-90
+    match = Math.floor(Math.random() * 25) + 65;
   }
 
-  // Try to extract skills
   const skillsMatch = text.match(/skills?[:\s]+([^\n.]+)/i);
   if (skillsMatch) {
     const extractedSkills = skillsMatch[1]
@@ -275,7 +291,6 @@ function extractScores(text) {
     }
   }
 
-  // Look for common skill keywords in the text
   const commonSkills = [
     'JavaScript', 'Python', 'Java', 'React', 'Node.js', 'SQL', 'AWS', 'Docker',
     'Leadership', 'Communication', 'Project Management', 'Agile', 'Scrum',
@@ -293,13 +308,12 @@ function extractScores(text) {
   return { ats, match, skills };
 }
 
-// ==================== DOWNLOAD ====================
+// ==================== DOWNLOAD PDF ====================
 
 downloadBtn.addEventListener('click', () => {
   const content = optimizedContent.textContent;
   
   try {
-    // Create PDF using jsPDF
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({
       orientation: 'portrait',
@@ -307,47 +321,37 @@ downloadBtn.addEventListener('click', () => {
       format: 'a4'
     });
 
-    // Set font
     doc.setFont('helvetica');
-    doc.setFontSize(11);
-
-    // Add title
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
     doc.text('Optimized Resume', 20, 20);
     
-    // Add metadata
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(100);
     doc.text(`Generated by InsightX - ${new Date().toLocaleDateString()}`, 20, 28);
     
-    // Add scores
     doc.setFontSize(10);
     doc.setTextColor(0);
     doc.setFont('helvetica', 'bold');
     doc.text(`ATS Score: ${atsScore.textContent} | Job Match: ${matchScore.textContent}`, 20, 36);
     
-    // Add a line
     doc.setDrawColor(102, 126, 234);
     doc.setLineWidth(0.5);
     doc.line(20, 40, 190, 40);
 
-    // Add content
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(0);
     
-    // Split text into lines that fit the page width
-    const pageWidth = 170; // mm (A4 width - margins)
+    const pageWidth = 170;
     const lineHeight = 6;
-    const maxLinesPerPage = 42;
     let yPosition = 48;
     
     const lines = doc.splitTextToSize(content, pageWidth);
     
     for (let i = 0; i < lines.length; i++) {
-      if (yPosition > 280) { // Near bottom of page
+      if (yPosition > 280) {
         doc.addPage();
         yPosition = 20;
       }
@@ -355,7 +359,6 @@ downloadBtn.addEventListener('click', () => {
       yPosition += lineHeight;
     }
 
-    // Save the PDF
     doc.save('optimized_resume.pdf');
     showStatus('Resume downloaded as PDF', 'success');
     
@@ -369,13 +372,125 @@ downloadBtn.addEventListener('click', () => {
 
 closeResults.addEventListener('click', () => {
   resultsSection.style.display = 'none';
-  
-  // Reset scores
   atsScoreFill.style.width = '0';
   matchScoreFill.style.width = '0';
-  
-  // Scroll to top
   document.querySelector('.main-content').scrollTop = 0;
+});
+
+// ==================== HISTORY ====================
+
+async function loadHistory() {
+  try {
+    const response = await fetch(`${API_URL}/history`);
+    
+    if (!response.ok) {
+      throw new Error('Failed to load history');
+    }
+
+    const data = await response.json();
+
+    if (data.success && data.history && data.history.length > 0) {
+      displayHistory(data.history);
+    } else {
+      showEmptyHistory();
+    }
+
+  } catch (error) {
+    console.error('Error loading history:', error);
+    showEmptyHistory();
+  }
+}
+
+function displayHistory(history) {
+  historyList.innerHTML = '';
+  
+  history.forEach((item, index) => {
+    setTimeout(() => {
+      const historyItem = createHistoryItem(item);
+      historyList.appendChild(historyItem);
+    }, index * 50);
+  });
+}
+
+function createHistoryItem(item) {
+  const div = document.createElement('div');
+  div.className = 'history-item';
+  
+  const date = new Date(item.createdAt);
+  const formattedDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const formattedTime = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  
+  div.innerHTML = `
+    <div class="history-item-header">
+      <div>
+        <div class="history-job-title">${item.jobTitle || 'Job Position'}</div>
+        <div class="history-company">${item.company || 'Company'}</div>
+      </div>
+      <div class="history-date">
+        ${formattedDate}<br>${formattedTime}
+      </div>
+    </div>
+    <div class="history-scores">
+      <div class="history-score-item">
+        <div class="history-score-label">ATS</div>
+        <div class="history-score-value">${item.atsScore}%</div>
+      </div>
+      <div class="history-score-item">
+        <div class="history-score-label">Match</div>
+        <div class="history-score-value">${item.matchScore}%</div>
+      </div>
+    </div>
+  `;
+  
+  div.addEventListener('click', () => {
+    showHistoryDetails(item);
+  });
+  
+  return div;
+}
+
+function showHistoryDetails(item) {
+  // Switch to optimizer tab and show results
+  tabBtns[0].click();
+  
+  // Display the historical results
+  atsScore.textContent = item.atsScore + '%';
+  atsScoreFill.style.width = item.atsScore + '%';
+  
+  matchScore.textContent = item.matchScore + '%';
+  matchScoreFill.style.width = item.matchScore + '%';
+  
+  skillsList.innerHTML = '';
+  if (item.skills && item.skills.length > 0) {
+    item.skills.forEach(skill => {
+      const tag = document.createElement('div');
+      tag.className = 'skill-tag';
+      tag.textContent = skill;
+      skillsList.appendChild(tag);
+    });
+  }
+  
+  optimizedContent.textContent = item.optimizedResume || 'No optimized content available';
+  resultsSection.style.display = 'block';
+  resultsSection.scrollIntoView({ behavior: 'smooth' });
+}
+
+function showEmptyHistory() {
+  historyList.innerHTML = `
+    <div class="empty-state">
+      <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke-width="1.5"/>
+        <polyline points="14 2 14 8 20 8" stroke-width="1.5"/>
+      </svg>
+      <p>No history yet</p>
+      <span>Start optimizing resumes to see your history</span>
+    </div>
+  `;
+}
+
+refreshHistory.addEventListener('click', () => {
+  loadHistory();
+  showStatus('History refreshed', 'success');
 });
 
 // ==================== UTILITY FUNCTIONS ====================

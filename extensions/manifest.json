@@ -3,13 +3,25 @@
   "name": "InsightX Resume Optimizer",
   "version": "1.0",
 
-  "permissions": ["scripting", "activeTab"],
+  "permissions": ["scripting", "activeTab", "sidePanel"],
 
   "host_permissions": [
     "http://localhost:5000/*"
   ],
 
+  "background": {
+    "service_worker": "background.js"
+  },
+
   "action": {
-    "default_popup": "popup.html"
+    "default_title": "InsightX Resume Optimizer"
+  },
+
+  "side_panel": {
+    "default_path": "sidebar.html"
+  },
+
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' https://cdnjs.cloudflare.com; object-src 'self'"
   }
 }
